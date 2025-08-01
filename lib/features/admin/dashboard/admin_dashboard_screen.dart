@@ -5,6 +5,7 @@ import '../manage_teachers/manage_teachers_screen.dart';
 import '../manage_notices/manage_notices_screen.dart';
 import '../manage_routines/manage_routines_screen.dart';
 import '../feedback/manage_feedback_screen.dart';
+import '../settings/admin_contact_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({Key? key}) : super(key: key);
@@ -14,26 +15,30 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  int _currentIndex = -1; // -1 means dashboard welcome page (no bottom nav selected)
+  int _currentIndex =
+      -1; // -1 means dashboard welcome page (no bottom nav selected)
 
-  final List<Widget> _pages = [
-    const _WelcomeDashboardCard(),
-    const ManageTeacherScreen(),
-    const ManageNoticesScreen(),
-    const ManageRoutineScreen(),
-    const ManageFeedbackScreen(),
+  // Pages aligned 1:1 with bottom nav indices (0..4)
+  // Map bottom nav indices to screens:
+  // 0: Teachers, 1: Notices, 2: Routines, 3: Contact, 4: Feedback
+  final List<Widget> _tabs = const [
+    ManageTeacherScreen(),     // index 0
+    ManageNoticesScreen(),     // index 1
+    ManageRoutineScreen(),     // index 2
+    AdminContactScreen(),      // index 3 (Contact)
+    ManageFeedbackScreen(),    // index 4 (Feedback)
   ];
 
   void _onNavTap(int index) {
     setState(() {
-      _currentIndex = index; // 0 to 3 corresponds to ManageTeacher to ManageFeedback
+      _currentIndex = index; // 0..4 corresponds to Teachers..Admins (5 tabs)
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final Widget currentBody =
-    _currentIndex == -1 ? _pages[0] : _pages[_currentIndex + 1];
+        _currentIndex == -1 ? const _WelcomeDashboardCard() : _tabs[_currentIndex];
 
     return AdminAppLayout(
       currentIndex: _currentIndex,
@@ -51,12 +56,12 @@ class _WelcomeDashboardCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final titleStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
-      fontWeight: FontWeight.bold,
-      color: Colors.teal.shade700,
-    );
+          fontWeight: FontWeight.bold,
+          color: Colors.teal.shade700,
+        );
     final textStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-      color: Colors.grey[700],
-    );
+          color: Colors.grey[700],
+        );
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -72,7 +77,7 @@ class _WelcomeDashboardCard extends StatelessWidget {
               Text('Welcome to Admin Dashboard', style: titleStyle),
               const SizedBox(height: 16),
               Text(
-                'Manage all teachers, notices, routines, and feedback easily from here.',
+                'Manage all teachers, notices, routines, feedback, and admins easily from here.',
                 style: textStyle,
               ),
               const SizedBox(height: 24),
@@ -87,6 +92,7 @@ class _WelcomeDashboardCard extends StatelessWidget {
               const SizedBox(height: 16),
               _infoRow(Icons.feedback, 'Feedback',
                   'Review feedback from students and staff.'),
+              const SizedBox(height: 16),
             ],
           ),
         ),

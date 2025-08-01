@@ -166,6 +166,7 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                   MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
                 );
               },
+              // Show Admin Login icon (manage admins screen removed, not admin login)
               child: const Icon(Icons.admin_panel_settings, color: Colors.white),
             ),
           ),

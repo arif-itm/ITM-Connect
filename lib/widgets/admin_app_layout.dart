@@ -92,6 +92,10 @@ class AdminAppLayout extends StatelessWidget {
                   label: 'Routines',
                 ),
                 BottomNavigationBarItem(
+                  icon: Icon(Icons.contact_mail),
+                  label: 'Contact',
+                ),
+                BottomNavigationBarItem(
                   icon: Icon(Icons.feedback),
                   label: 'Feedback',
                 ),

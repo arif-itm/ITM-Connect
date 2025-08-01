@@ -60,6 +60,18 @@ class AdminDrawer extends StatelessWidget {
             icon: Icons.feed,
             targetPage: 'notices',
           ),
+          _buildDrawerItem(
+            context,
+            label: 'Feedback',
+            icon: Icons.feedback,
+            targetPage: 'admin/feedback',
+          ),
+          _buildDrawerItem(
+            context,
+            label: 'Contact',
+            icon: Icons.contact_page,
+            targetPage: 'admin/contact',
+          ),
         ],
       ),
     );
@@ -72,7 +84,7 @@ class AdminDrawer extends StatelessWidget {
         required IconData icon,
         required String targetPage,
       }) {
-    final bool isSelected = currentPage == targetPage;
+    final bool isSelected = currentPage == targetPage || ('/$targetPage' == '/$currentPage');
     return ListTile(
       leading: Icon(
         icon,
@@ -88,7 +100,8 @@ class AdminDrawer extends StatelessWidget {
       selected: isSelected,
       onTap: () {
         if (!isSelected) {
-          Navigator.pushReplacementNamed(context, '/$targetPage');
+          final route = targetPage.startsWith('/') ? targetPage : '/$targetPage';
+          Navigator.pushReplacementNamed(context, route);
         } else {
           Navigator.pop(context); // Just close drawer
         }
@@ -96,5 +109,3 @@ class AdminDrawer extends StatelessWidget {
     );
   }
 }
-
-

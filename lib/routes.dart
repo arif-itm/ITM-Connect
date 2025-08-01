@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
-import '../features/admin/dashboard/admin_dashboard_screen.dart';
-import '../features/admin/manage_routines/manage_routines_screen.dart';
-import '../features/admin/manage_teachers/manage_teachers_screen.dart';
-import '../features/admin/manage_notices/manage_notices_screen.dart';
+import 'app/app.dart';
+import 'features/landing/landing_screen.dart';
+import 'features/admin/debug/firestore_debug_screen.dart';
+import 'features/admin/settings/admin_contact_screen.dart';
+import 'features/admin/feedback/manage_feedback_screen.dart';
 
-final Map<String, WidgetBuilder> appRoutes = {
-  '/dashboard': (_) => const AdminDashboardScreen(),
-  '/routines': (_) => const ManageRoutineScreen(),
-  '/teachers': (_) => const ManageTeacherScreen(),
-  '/notices': (_) => const ManageNoticesScreen(),
-};
+class AppRoutes {
+  static const String landing = '/';
+  static const String firestoreDebug = '/firestore-debug';
+
+  static Map<String, WidgetBuilder> routes = {
+    landing: (_) => const LandingScreen(),
+    firestoreDebug: (_) => const FirestoreDebugScreen(),
+    '/admin/contact': (_) => const AdminContactScreen(),
+    '/admin/feedback': (_) => const ManageFeedbackScreen(),
+  };
+}

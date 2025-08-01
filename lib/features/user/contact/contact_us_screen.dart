@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ContactUsScreen extends StatefulWidget {
   const ContactUsScreen({super.key});
@@ -32,53 +35,68 @@ class _ContactUsScreenState extends State<ContactUsScreen>
     super.dispose();
   }
 
-  Widget _buildDashboardCard({
+  Future<void> _launchUri(String uriString) async {
+    final uri = Uri.parse(uriString);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open: $uriString')),
+      );
+    }
+  }
+
+  Widget _linkCard({
     required IconData icon,
     required String title,
-    required String subtitle,
+    required String value,
     required Color color,
     required double width,
+    required VoidCallback onTap,
   }) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        width: width,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey.withOpacity(0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black12.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            CircleAvatar(
-              backgroundColor: color.withOpacity(0.1),
-              child: Icon(icon, color: color),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 16)),
-                  const SizedBox(height: 4),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          fontSize: 14, color: Colors.black54)),
-                ],
+    return InkWell(
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          width: width,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.grey.withOpacity(0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black12.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: color.withOpacity(0.1),
+                child: Icon(icon, color: color),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 16)),
+                    const SizedBox(height: 4),
+                    Text(value,
+                        style: const TextStyle(
+                            fontSize: 14, color: Colors.black87)),
+                  ],
+                ),
+              ),
+              const Icon(Icons.open_in_new, size: 18, color: Colors.grey),
+            ],
+          ),
         ),
       ),
     );
@@ -95,79 +113,72 @@ class _ContactUsScreenState extends State<ContactUsScreen>
       backgroundColor: Colors.grey.shade100,
       body: FadeTransition(
         opacity: _fadeAnimation,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 20),
+        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+          stream: FirebaseFirestore.instance
+              .collection('settings')
+              .doc('contact')
+              .snapshots(),
+          builder: (context, snap) {
+            final data = snap.data?.data() ?? {};
+            final phone = (data['phone'] ?? '') as String;
+            final email =
+                (data['email'] ?? '') as String;
+            final website =
+                (data['website'] ?? '')
+                    as String;
+            final facebook =
+                (data['facebook'] ?? '')
+                    as String;
 
-              // Contact Cards
-              Wrap(
-                spacing: 24,
-                runSpacing: 24,
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildDashboardCard(
-                    icon: Icons.email,
-                    title: 'Email',
-                    subtitle: 'itmoffice@daffodilvarsity.edu.bd',
-                    color: Colors.green,
-                    width: cardWidth,
+                  const SizedBox(height: 20),
+                  Wrap(
+                    spacing: 24,
+                    runSpacing: 24,
+                    children: [
+                      _linkCard(
+                        icon: Icons.phone,
+                        title: 'Phone',
+                        value: phone,
+                        color: Colors.teal,
+                        width: cardWidth,
+                        onTap: () => _launchUri('tel:${phone.replaceAll('-', '')}'),
+                      ),
+                      _linkCard(
+                        icon: Icons.email_outlined,
+                        title: 'Email',
+                        value: email,
+                        color: Colors.green,
+                        width: cardWidth,
+                        onTap: () => _launchUri('mailto:$email'),
+                      ),
+                      _linkCard(
+                        icon: Icons.language,
+                        title: 'Website',
+                        value: website,
+                        color: Colors.blue,
+                        width: cardWidth,
+                        onTap: () => _launchUri(website),
+                      ),
+                      _linkCard(
+                        icon: Icons.facebook,
+                        title: 'Facebook',
+                        value: facebook,
+                        color: Colors.indigo,
+                        width: cardWidth,
+                        onTap: () => _launchUri(facebook),
+                      ),
+                    ],
                   ),
-                  _buildDashboardCard(
-                    icon: Icons.phone,
-                    title: 'Phone',
-                    subtitle: '01847-140039',
-                    color: Colors.teal,
-                    width: cardWidth,
-                  ),
-                  _buildDashboardCard(
-                    icon: Icons.location_on,
-                    title: 'Address',
-                    subtitle:
-                    'Daffodil Smart City (DSC), Birulia, Savar, Dhaka-1216',
-                    color: Colors.orange,
-                    width: cardWidth,
-                  ),
-                  _buildDashboardCard(
-                    icon: Icons.public,
-                    title: 'Website',
-                    subtitle: 'itm.daffodilvarsity.edu.bd',
-                    color: Colors.blue,
-                    width: cardWidth,
-                  ),
+                  const SizedBox(height: 20),
                 ],
               ),
-
-              const SizedBox(height: 40),
-
-              // Call to Action
-              Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Messaging feature coming soon.'),
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.message),
-                  label: const Text('Send a Message'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 30, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 5,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

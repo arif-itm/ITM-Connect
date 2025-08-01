@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../services/firestore_service.dart';
 
 class ManageNoticesScreen extends StatefulWidget {
   const ManageNoticesScreen({super.key});
@@ -9,21 +11,11 @@ class ManageNoticesScreen extends StatefulWidget {
 
 class _ManageNoticesScreenState extends State<ManageNoticesScreen>
     with SingleTickerProviderStateMixin {
-  final List<Map<String, String>> _notices = [
-    {
-      'title': 'Class Cancelled',
-      'body': 'All classes will remain suspended on Monday due to departmental event.',
-      'date': '2025-07-01',
-    },
-    {
-      'title': 'Mid-Term Exam Notice',
-      'body': 'Mid-term exams will begin from 15th July. Check routine later.',
-      'date': '2025-07-05',
-    },
-  ];
-
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
+
+  final _fs = FirestoreService.instance;
+  static const String noticesCol = 'notices';
 
   @override
   void initState() {
@@ -39,7 +31,7 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
     );
   }
 
-  void _showNoticeForm({Map<String, String>? existingData, int? index}) {
+  void _showNoticeForm({Map<String, dynamic>? existingData, String? docId}) {
     final titleController = TextEditingController(text: existingData?['title']);
     final bodyController = TextEditingController(text: existingData?['body']);
     final dateController = TextEditingController(text: existingData?['date']);
@@ -58,21 +50,25 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
                 TextFormField(
                   controller: titleController,
                   decoration: const InputDecoration(labelText: 'Title'),
-                  validator: (value) => value!.isEmpty ? 'Title is required' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Title is required' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: bodyController,
                   maxLines: 3,
                   decoration: const InputDecoration(labelText: 'Body'),
-                  validator: (value) => value!.isEmpty ? 'Body is required' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Body is required' : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: dateController,
-                  decoration: const InputDecoration(labelText: 'Date (YYYY-MM-DD)'),
+                  decoration:
+                      const InputDecoration(labelText: 'Date (YYYY-MM-DD)'),
                   keyboardType: TextInputType.datetime,
-                  validator: (value) => value!.isEmpty ? 'Date is required' : null,
+                  validator: (value) =>
+                      value!.isEmpty ? 'Date is required' : null,
                 ),
               ],
             ),
@@ -88,23 +84,25 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
               backgroundColor: Colors.orange.shade700,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
+            onPressed: () async {
               if (formKey.currentState!.validate()) {
                 final newData = {
                   'title': titleController.text.trim(),
                   'body': bodyController.text.trim(),
                   'date': dateController.text.trim(),
+                  'updatedAt': FieldValue.serverTimestamp(),
                 };
 
-                setState(() {
-                  if (existingData == null) {
-                    _notices.add(newData);
-                  } else {
-                    _notices[index!] = newData;
-                  }
-                });
+                if (docId == null) {
+                  await _fs.add(noticesCol, {
+                    ...newData,
+                    'createdAt': FieldValue.serverTimestamp(),
+                  });
+                } else {
+                  await _fs.set(noticesCol, docId, newData, merge: true);
+                }
 
-                Navigator.pop(context);
+                if (mounted) Navigator.pop(context);
               }
             },
             child: const Text('Save'),
@@ -114,7 +112,7 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
     );
   }
 
-  void _deleteNotice(int index) {
+  void _deleteNotice(String docId) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -127,9 +125,9 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              setState(() => _notices.removeAt(index));
-              Navigator.pop(context);
+            onPressed: () async {
+              await _fs.delete(noticesCol, docId);
+              if (mounted) Navigator.pop(context);
             },
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
@@ -138,7 +136,7 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
     );
   }
 
-  Widget _buildNoticeCard(Map<String, String> notice, int index) {
+  Widget _buildNoticeCard(Map<String, dynamic> notice, String docId) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       margin: const EdgeInsets.only(bottom: 16),
@@ -180,11 +178,12 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
           children: [
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.orange),
-              onPressed: () => _showNoticeForm(existingData: notice, index: index),
+              onPressed: () =>
+                  _showNoticeForm(existingData: notice, docId: docId),
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deleteNotice(index),
+              onPressed: () => _deleteNotice(docId),
             ),
           ],
         ),
@@ -208,12 +207,29 @@ class _ManageNoticesScreenState extends State<ManageNoticesScreen>
           Expanded(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: _notices.isEmpty
-                  ? const Center(child: Text('No notices available.'))
-                  : ListView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: _notices.length,
-                itemBuilder: (_, index) => _buildNoticeCard(_notices[index], index),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _fs.streamCollection(
+                  noticesCol,
+                  build: (q) => q.orderBy('date', descending: true),
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return const Center(child: Text('No notices available.'));
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: docs.length,
+                    itemBuilder: (_, index) {
+                      final d = docs[index];
+                      final data = d.data();
+                      return _buildNoticeCard(data, d.id);
+                    },
+                  );
+                },
               ),
             ),
           ),

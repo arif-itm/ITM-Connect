@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:itm_connect/features/admin/dashboard/admin_dashboard_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -50,32 +52,97 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
     super.dispose();
   }
 
-  bool _isValidInput(String input) {
-    final pattern = RegExp(r'^[a-zA-Z0-9_]{4,20}$');
+  bool _isValidEmail(String input) {
+    final pattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
     return pattern.hasMatch(input);
   }
 
+  bool _isValidPassword(String input) {
+    return input.length >= 6;
+  }
+
+  Future<bool> _isAdminUid(String uid) async {
+    // Checks Firestore document: admins/{uid} with field isAdmin=true
+    final doc =
+        await FirebaseFirestore.instance.collection('admins').doc(uid).get();
+    if (!doc.exists) return false;
+    final data = doc.data();
+    if (data == null) return false;
+    final isAdmin = data['isAdmin'];
+    return isAdmin == true;
+  }
+
   void _handleLogin() async {
-    final username = _usernameController.text.trim().toLowerCase();
+    final email = _usernameController.text.trim();
     final password = _passwordController.text;
 
-    if (_formKey.currentState?.validate() ?? false) {
-      if (_isValidInput(username) && _isValidInput(password)) {
-        if (username == 'admin' && password == 'admin_admin') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-          );
-        } else {
-          setState(() {
-            _errorMessage = 'Incorrect credentials.';
-          });
-        }
-      } else {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    if (!_isValidEmail(email) || !_isValidPassword(password)) {
+      setState(() {
+        _errorMessage =
+            'Please enter a valid email and a password of at least 6 characters.';
+      });
+      return;
+    }
+
+    try {
+      final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final user = cred.user;
+      if (user == null) {
         setState(() {
-          _errorMessage = 'Invalid characters used.';
+          _errorMessage = 'Authentication failed.';
+        });
+        return;
+      }
+
+      // Optional: refresh token to get latest custom claims if you use them
+      // await user.getIdToken(true);
+
+      // Check admin role via Firestore (admins collection)
+      final allowed = await _isAdminUid(user.uid);
+
+      if (allowed) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+        );
+      } else {
+        // Not an admin: sign out for safety
+        await FirebaseAuth.instance.signOut();
+        setState(() {
+          _errorMessage = 'Access denied. Admin privileges required.';
         });
       }
+    } on FirebaseAuthException catch (e) {
+      String msg = 'Login failed.';
+      switch (e.code) {
+        case 'user-not-found':
+        case 'wrong-password':
+        case 'invalid-credential':
+          msg = 'Incorrect email or password.';
+          break;
+        case 'invalid-email':
+          msg = 'Invalid email format.';
+          break;
+        case 'user-disabled':
+          msg = 'Account disabled. Contact administrator.';
+          break;
+        default:
+          msg = 'Auth error: ${e.code}';
+      }
+      setState(() {
+        _errorMessage = msg;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Unexpected error. Please try again.';
+      });
     }
   }
 
@@ -198,17 +265,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                           const Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Username',
+                              'Email',
                               style: TextStyle(fontWeight: FontWeight.w600),
                             ),
                           ),
                           const SizedBox(height: 6),
                           TextFormField(
                             controller: _usernameController,
-                            autofillHints: const [AutofillHints.username],
+                            keyboardType: TextInputType.emailAddress,
+                            autofillHints: const [AutofillHints.email],
                             decoration: InputDecoration(
-                              hintText: 'admin',
-                              prefixIcon: const Icon(Icons.person_outline),
+                              hintText: 'admin@yourdomain.com',
+                              prefixIcon: const Icon(Icons.email_outlined),
                               filled: true,
                               fillColor: Colors.grey.shade100,
                               border: OutlineInputBorder(
@@ -216,11 +284,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please enter username';
+                              final v = value?.trim() ?? '';
+                              if (v.isEmpty) {
+                                return 'Please enter email';
                               }
-                              if (!_isValidInput(value.trim())) {
-                                return 'Only letters, numbers, _ allowed.';
+                              if (!_isValidEmail(v)) {
+                                return 'Enter a valid email address';
                               }
                               return null;
                             },
@@ -263,11 +332,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                               ),
                             ),
                             validator: (value) {
-                              if (value == null || value.isEmpty) {
+                              final v = value ?? '';
+                              if (v.isEmpty) {
                                 return 'Please enter password';
                               }
-                              if (!_isValidInput(value)) {
-                                return 'Only letters, numbers, _ allowed.';
+                              if (!_isValidPassword(v)) {
+                                return 'Password must be at least 6 characters';
                               }
                               return null;
                             },
@@ -291,7 +361,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                                 backgroundColor: Colors.teal,
                                 foregroundColor: Colors.white,
                                 padding:
-                                const EdgeInsets.symmetric(vertical: 16),
+                                    const EdgeInsets.symmetric(vertical: 16),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(14),
                                 ),

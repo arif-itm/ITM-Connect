@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../services/firestore_service.dart';
 
 class ManageTeacherScreen extends StatefulWidget {
   const ManageTeacherScreen({super.key});
@@ -11,25 +13,11 @@ class ManageTeacherScreen extends StatefulWidget {
 
 class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     with SingleTickerProviderStateMixin {
-  final List<Map<String, dynamic>> _teachers = [
-    {
-      'name': 'Md. Imran Hossain',
-      'email': 'imran@diu.edu.bd',
-      'role': 'Professor',
-      'initial': 'MIH',
-      'imageFile': null,
-    },
-    {
-      'name': 'Farzana Akter',
-      'email': 'farzana@diu.edu.bd',
-      'role': 'Lecturer',
-      'initial': 'FA',
-      'imageFile': null,
-    },
-  ];
-
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
+
+  final _fs = FirestoreService.instance;
+  static const String teachersCol = 'teachers';
 
   @override
   void initState() {
@@ -45,12 +33,13 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     );
   }
 
-  void _showTeacherForm({Map<String, dynamic>? existingData, int? index}) {
+  void _showTeacherForm({Map<String, dynamic>? existingData, String? docId}) {
     final nameController = TextEditingController(text: existingData?['name']);
     final emailController = TextEditingController(text: existingData?['email']);
     final roleController = TextEditingController(text: existingData?['role']);
-    final initialController = TextEditingController(text: existingData?['initial']);
-    File? selectedFile = existingData?['imageFile'];
+    final initialController =
+        TextEditingController(text: existingData?['initial']);
+    File? selectedFile; // kept for UI, not yet uploaded to Storage
 
     bool showNameError = false;
     bool showEmailError = false;
@@ -135,24 +124,19 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   final name = nameController.text.trim();
                   final email = emailController.text.trim();
                   final role = roleController.text.trim();
                   final initial = initialController.text.trim().toUpperCase();
 
-                  setModalState(() {
-                    showNameError = name.isEmpty;
-                    showEmailError = email.isEmpty;
-                    showRoleError = role.isEmpty;
-                    showInitialError = initial.isEmpty ||
-                        _teachers.any((t) =>
-                        t['initial'] == initial &&
-                            (existingData == null || t != existingData));
-                    initialErrorMessage = initial.isEmpty
-                        ? 'Required'
-                        : 'Initial already exists';
-                  });
+                  showNameError = name.isEmpty;
+                  showEmailError = email.isEmpty;
+                  showRoleError = role.isEmpty;
+                  showInitialError = initial.isEmpty;
+                  initialErrorMessage = initial.isEmpty ? 'Required' : null;
+
+                  (context as Element).markNeedsBuild();
 
                   if (showNameError ||
                       showEmailError ||
@@ -161,23 +145,25 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                     return;
                   }
 
-                  final newData = {
+                  final payload = {
                     'name': name,
                     'email': email,
                     'role': role,
                     'initial': initial,
-                    'imageFile': selectedFile,
+                    'photoUrl': existingData?['photoUrl'],
+                    'updatedAt': FieldValue.serverTimestamp(),
                   };
 
-                  setState(() {
-                    if (existingData == null) {
-                      _teachers.add(newData);
-                    } else {
-                      _teachers[index!] = newData;
-                    }
-                  });
+                  if (docId == null) {
+                    await _fs.add(teachersCol, {
+                      ...payload,
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
+                  } else {
+                    await _fs.set(teachersCol, docId, payload, merge: true);
+                  }
 
-                  Navigator.pop(context);
+                  if (mounted) Navigator.pop(context);
                 },
                 child: const Text('Save'),
               ),
@@ -188,7 +174,7 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     );
   }
 
-  void _deleteTeacher(int index) {
+  void _deleteTeacher(String docId) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -200,9 +186,9 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              setState(() => _teachers.removeAt(index));
-              Navigator.pop(context);
+            onPressed: () async {
+              await _fs.delete(teachersCol, docId);
+              if (mounted) Navigator.pop(context);
             },
             child: const Text('Delete'),
           ),
@@ -211,8 +197,9 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     );
   }
 
-  Widget _buildTeacherCard(Map<String, dynamic> teacher, int index) {
+  Widget _buildTeacherCard(Map<String, dynamic> teacher, String docId) {
     final imageFile = teacher['imageFile'];
+    final photoUrl = teacher['photoUrl'];
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
@@ -230,12 +217,16 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         leading: CircleAvatar(
           radius: 28,
           backgroundImage: imageFile != null
               ? FileImage(imageFile)
-              : const AssetImage('assets/images/default_profile.png') as ImageProvider,
+              : (photoUrl != null && (photoUrl as String).isNotEmpty)
+                  ? NetworkImage(photoUrl)
+                  : const AssetImage('assets/images/default_profile.png')
+                      as ImageProvider,
         ),
         title: Text(
           '${teacher['name']} (${teacher['initial']})',
@@ -245,7 +236,8 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(teacher['email'] ?? '', style: const TextStyle(fontSize: 14)),
-            Text(teacher['role'] ?? '', style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            Text(teacher['role'] ?? '',
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
           ],
         ),
         trailing: Wrap(
@@ -253,11 +245,12 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
           children: [
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.orange),
-              onPressed: () => _showTeacherForm(existingData: teacher, index: index),
+              onPressed: () =>
+                  _showTeacherForm(existingData: teacher, docId: docId),
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deleteTeacher(index),
+              onPressed: () => _deleteTeacher(docId),
             ),
           ],
         ),
@@ -281,11 +274,29 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
           Expanded(
             child: FadeTransition(
               opacity: _fadeAnimation,
-              child: ListView.builder(
-                padding: const EdgeInsets.all(20),
-                itemCount: _teachers.length,
-                itemBuilder: (_, index) =>
-                    _buildTeacherCard(_teachers[index], index),
+              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                stream: _fs.streamCollection(
+                  teachersCol,
+                  build: (q) => q.orderBy('name'),
+                ),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final docs = snapshot.data?.docs ?? [];
+                  if (docs.isEmpty) {
+                    return const Center(child: Text('No teachers added yet.'));
+                  }
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: docs.length,
+                    itemBuilder: (_, index) {
+                      final d = docs[index];
+                      final data = d.data();
+                      return _buildTeacherCard(data, d.id);
+                    },
+                  );
+                },
               ),
             ),
           ),
