@@ -1,5 +1,10 @@
 name: Flutter Release
 
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
 on:
   push:
     branches:
@@ -26,14 +31,17 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
+    - name: Clean Flutter
+      run: flutter clean
+
     - name: Build Web
       run: flutter build web
 
     - name: Build Android (APK)
       run: flutter build apk --release
 
-    - name: Build iOS (IPA)
-      run: flutter build ipa
+    # - name: Build iOS (IPA)
+    #   run: flutter build ipa --no-codesign
 
     - name: Generate Version Number
       id: vars
@@ -73,12 +81,12 @@ jobs:
         asset_name: app-release.apk
         asset_content_type: application/vnd.android.package-archive
 
-    - name: Upload iOS Artifact
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/ios/ipa/runner.ipa # Path might vary, verify output
-        asset_name: runner.ipa
-        asset_content_type: application/octet-stream
+    # - name: Upload iOS Artifact
+    #   uses: actions/upload-release-asset@v1
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    #   with:
+    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
+    #     asset_path: build/ios/ipa/runner.ipa # Path might vary, verify output
+    #     asset_name: runner.ipa
+    #     asset_content_type: application/octet-stream
