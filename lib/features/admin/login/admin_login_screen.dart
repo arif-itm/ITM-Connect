@@ -16,6 +16,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
   final _passwordController = TextEditingController();
   String? _errorMessage;
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
@@ -86,6 +87,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
       return;
     }
 
+    setState(() {
+      _errorMessage = null;
+      _isLoading = true;
+    });
+
     try {
       final cred = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
@@ -108,10 +114,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
 
       if (allowed) {
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
-        );
+        // Guarded route will still verify admin state; this is only navigation.
+        Navigator.pushReplacementNamed(context, '/admin_home');
       } else {
         // Not an admin: sign out for safety
         await FirebaseAuth.instance.signOut();
@@ -143,6 +147,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
       setState(() {
         _errorMessage = 'Unexpected error. Please try again.';
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -223,161 +233,179 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
                 ),
                 child: FadeTransition(
                   opacity: _fadeAnimation,
-                  child: Container(
-                    padding: const EdgeInsets.all(28),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 18,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.5),
-                      ),
-                    ),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
-                          buildAnimatedLogoIcon(),
-                          const SizedBox(height: 10),
-                          const Text(
-                            'Admin',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.teal,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Secure Admin Access Panel',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.black54,
-                            ),
-                          ),
-                          const SizedBox(height: 30),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Email',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _usernameController,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.email],
-                            decoration: InputDecoration(
-                              hintText: 'admin@yourdomain.com',
-                              prefixIcon: const Icon(Icons.email_outlined),
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            validator: (value) {
-                              final v = value?.trim() ?? '';
-                              if (v.isEmpty) {
-                                return 'Please enter email';
-                              }
-                              if (!_isValidEmail(v)) {
-                                return 'Enter a valid email address';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 20),
-                          const Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              'Password',
-                              style: TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextFormField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            enableSuggestions: false,
-                            autocorrect: false,
-                            autofillHints: const [AutofillHints.password],
-                            decoration: InputDecoration(
-                              hintText: '••••••••',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_off
-                                      : Icons.visibility,
-                                  color: Colors.grey,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  });
-                                },
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey.shade100,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            validator: (value) {
-                              final v = value ?? '';
-                              if (v.isEmpty) {
-                                return 'Please enter password';
-                              }
-                              if (!_isValidPassword(v)) {
-                                return 'Password must be at least 6 characters';
-                              }
-                              return null;
-                            },
-                          ),
-                          if (_errorMessage != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _errorMessage!,
-                              style: const TextStyle(
-                                  color: Colors.red, fontSize: 13),
+                  child: AbsorbPointer(
+                    absorbing: _isLoading,
+                    child: Opacity(
+                      opacity: _isLoading ? 0.6 : 1.0,
+                      child: Container(
+                        padding: const EdgeInsets.all(28),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 18,
+                              offset: const Offset(0, 8),
                             ),
                           ],
-                          const SizedBox(height: 28),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _handleLogin,
-                              icon: const Icon(Icons.login),
-                              label: const Text('Login'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.teal,
-                                foregroundColor: Colors.white,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 16),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                textStyle: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.5),
+                          ),
+                        ),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                              buildAnimatedLogoIcon(),
+                              const SizedBox(height: 10),
+                              const Text(
+                                'Admin',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.teal,
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: 4),
+                              const Text(
+                                'Secure Admin Access Panel',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.black54,
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Email',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _usernameController,
+                                keyboardType: TextInputType.emailAddress,
+                                autofillHints: const [AutofillHints.email],
+                                decoration: InputDecoration(
+                                  hintText: 'admin@yourdomain.com',
+                                  prefixIcon: const Icon(Icons.email_outlined),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  final v = value?.trim() ?? '';
+                                  if (v.isEmpty) {
+                                    return 'Please enter email';
+                                  }
+                                  if (!_isValidEmail(v)) {
+                                    return 'Enter a valid email address';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 20),
+                              const Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  'Password',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              TextFormField(
+                                controller: _passwordController,
+                                obscureText: _obscurePassword,
+                                enableSuggestions: false,
+                                autocorrect: false,
+                                autofillHints: const [AutofillHints.password],
+                                decoration: InputDecoration(
+                                  hintText: '••••••••',
+                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off
+                                          : Icons.visibility,
+                                      color: Colors.grey,
+                                    ),
+                                    onPressed: () {
+                                      setState(() {
+                                        _obscurePassword = !_obscurePassword;
+                                      });
+                                    },
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                validator: (value) {
+                                  final v = value ?? '';
+                                  if (v.isEmpty) {
+                                    return 'Please enter password';
+                                  }
+                                  if (!_isValidPassword(v)) {
+                                    return 'Password must be at least 6 characters';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              if (_errorMessage != null) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  _errorMessage!,
+                                  style: const TextStyle(
+                                      color: Colors.red, fontSize: 13),
+                                ),
+                              ],
+                              const SizedBox(height: 28),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _isLoading ? null : _handleLogin,
+                                  icon: _isLoading
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2.2,
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                                    Colors.white),
+                                          ),
+                                        )
+                                      : const Icon(Icons.login),
+                                  label: Text(_isLoading ? 'Signing in...' : 'Login'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.teal,
+                                    foregroundColor: Colors.white,
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    textStyle: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              const Text(
+                                '© 2025 ITM Connect. All rights reserved.',
+                                style:
+                                    TextStyle(fontSize: 12, color: Colors.grey),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            '© 2025 ITM Connect. All rights reserved.',
-                            style: TextStyle(fontSize: 12, color: Colors.grey),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -385,6 +413,48 @@ class _AdminLoginScreenState extends State<AdminLoginScreen>
               ),
             ),
           ),
+          if (_isLoading)
+            Container(
+              color: Colors.black.withOpacity(0.25),
+              child: Center(
+                child: Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 18,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 4,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.teal),
+                        ),
+                      ),
+                      SizedBox(height: 14),
+                      Text(
+                        'Authenticating...',
+                        style: TextStyle(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AdminAppLayout extends StatelessWidget {
   final bool showAppBar;
@@ -53,9 +54,45 @@ class AdminAppLayout extends StatelessWidget {
               actions: [
                 IconButton(
                   icon: const Icon(Icons.logout, color: Colors.teal),
-                  onPressed: () {
-                    Navigator.pushNamedAndRemoveUntil(
-                        context, '/', (route) => false);
+                  onPressed: () async {
+                    final shouldLogout = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        title: const Text('Confirm Logout'),
+                        content: const Text(
+                            'Are you sure you want to logout'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.teal,
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () => Navigator.of(ctx).pop(true),
+                            child: const Text('Logout'),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (shouldLogout == true) {
+                      try {
+                        // Firebase sign out (best-effort). Route is guarded, so no local flags.
+                        await FirebaseAuth.instance.signOut();
+                      } catch (_) {
+                        // Even if signOut throws, still navigate to landing
+                      }
+                      if (context.mounted) {
+                        Navigator.pushNamedAndRemoveUntil(
+                          context,
+                          '/',
+                          (route) => false,
+                        );
+                      }
+                    }
                   },
                 ),
               ],

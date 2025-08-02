@@ -77,7 +77,7 @@ class _WelcomeDashboardCard extends StatelessWidget {
               Text('Welcome to Admin Dashboard', style: titleStyle),
               const SizedBox(height: 16),
               Text(
-                'Manage all teachers, notices, routines, feedback, and admins easily from here.',
+                'Manage all teachers, notices, routines, contact, and feedback information easily from here.',
                 style: textStyle,
               ),
               const SizedBox(height: 24),
@@ -90,13 +90,32 @@ class _WelcomeDashboardCard extends StatelessWidget {
               _infoRow(Icons.calendar_month, 'Routines',
                   'Manage class schedules and routines.'),
               const SizedBox(height: 16),
+              _infoRow(Icons.contact_mail, 'Contact',
+                  'View and update institute contact information.'),
+              const SizedBox(height: 16),
               _infoRow(Icons.feedback, 'Feedback',
                   'Review feedback from students and staff.'),
               const SizedBox(height: 16),
+              const SizedBox(height: 8),
             ],
           ),
         ),
       ),
+    );
+  }
+
+
+  Widget _kv(TextStyle? label, TextStyle? value, String k, String v) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(k, style: label),
+        ),
+        const SizedBox(width: 8),
+        Expanded(child: Text(v, style: value)),
+      ],
     );
   }
 
