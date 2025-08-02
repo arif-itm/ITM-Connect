@@ -26,6 +26,9 @@ jobs:
     - name: Install dependencies
       run: flutter pub get
 
+    - name: Clean Flutter
+      run: flutter clean
+
     - name: Build Web
       run: flutter build web
 
@@ -33,7 +36,7 @@ jobs:
       run: flutter build apk --release
 
     - name: Build iOS (IPA)
-      run: flutter build ipa
+      run: flutter build ipa --no-codesign
 
     - name: Generate Version Number
       id: vars
