@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FeedbackScreen extends StatefulWidget {
   const FeedbackScreen({super.key});
@@ -44,19 +45,41 @@ class _FeedbackScreenState extends State<FeedbackScreen>
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => isSubmitting = true);
-    await Future.delayed(const Duration(seconds: 2)); // mock save
+    try {
+      final payload = {
+        'name': _nameController.text.trim(),
+        'email': _emailController.text.trim(),
+        'type': _feedbackType,
+        'message': _messageController.text.trim(),
+        'createdAt': FieldValue.serverTimestamp(),
+      };
 
-    if (mounted) {
+      await FirebaseFirestore.instance.collection('feedback').add(payload);
+
+      if (!mounted) return;
+
       _nameController.clear();
       _emailController.clear();
       _messageController.clear();
-      _feedbackType = 'Suggestion';
+      setState(() {
+        _feedbackType = 'Suggestion';
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Thank you for your feedback!')),
       );
-
-      setState(() => isSubmitting = false);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to submit feedback: $e'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => isSubmitting = false);
+      }
     }
   }
 
@@ -112,9 +135,8 @@ class _FeedbackScreenState extends State<FeedbackScreen>
                       controller: _nameController,
                       label: 'Your Name',
                       icon: Icons.person_outline,
-                      validator: (val) => val!.trim().isEmpty
-                          ? 'Please enter your name'
-                          : null,
+                      validator: (val) =>
+                          val!.trim().isEmpty ? 'Please enter your name' : null,
                     ),
                     const SizedBox(height: 18),
 
@@ -140,9 +162,9 @@ class _FeedbackScreenState extends State<FeedbackScreen>
                       icon: const Icon(Icons.keyboard_arrow_down_rounded),
                       items: _feedbackTypes
                           .map((type) => DropdownMenuItem(
-                        value: type,
-                        child: Text(type),
-                      ))
+                                value: type,
+                                child: Text(type),
+                              ))
                           .toList(),
                       decoration: InputDecoration(
                         labelText: 'Feedback Type',
@@ -183,26 +205,26 @@ class _FeedbackScreenState extends State<FeedbackScreen>
                       child: isSubmitting
                           ? const CircularProgressIndicator()
                           : ElevatedButton.icon(
-                        onPressed: _submitFeedback,
-                        icon: const Icon(Icons.send_rounded),
-                        label: const Text('Submit Feedback'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
-                          foregroundColor: Colors.white,
-                          elevation: 4,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 36,
-                            vertical: 16,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          textStyle: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
+                              onPressed: _submitFeedback,
+                              icon: const Icon(Icons.send_rounded),
+                              label: const Text('Submit Feedback'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.green.shade700,
+                                foregroundColor: Colors.white,
+                                elevation: 4,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 36,
+                                  vertical: 16,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                textStyle: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
                     ),
                   ],
                 ),

@@ -1,47 +1,56 @@
 name: itm_connect
-description: Official ITM Connect App – Admin & User Panel
-publish_to: 'none'
-
+description: A new Flutter project.
+publish_to: "none"
 version: 1.0.0+1
 
 environment:
-  sdk: ">=2.19.0 <4.0.0"
+  sdk: ">=3.3.0 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
 
-  # ✅ UI & Design Libraries
-  flutter_animate: ^4.3.0
-  cupertino_icons: ^1.0.2
+  cupertino_icons: ^1.0.6
+
+  # Firebase core
+  firebase_core: ^2.31.0
+
+  # Auth
+  firebase_auth: ^4.19.6
+
+  # Firestore
+  cloud_firestore: ^4.17.5
+
+  # Cloud Functions client (for callable functions)
+  cloud_functions: ^4.7.6
+
+  # File picker (used in manage_teachers)
+  file_picker: ^8.0.5
+
+  # Iconsax (used in user_drawer, routine/profile screens)
   iconsax: ^0.0.8
+
+  # Animations used across user screens (animate(), FadeEffect, SlideEffect, ms)
+  flutter_animate: ^4.5.2
+
+  # Date formatting used in class_routine and teacher list/profile
+  intl: ^0.19.0
+
+  # Font Awesome used in universal_drawer
   font_awesome_flutter: ^10.7.0
-  dotted_border: ^2.0.0
-  lottie: ^2.6.0
-  smooth_page_indicator: ^1.1.0
-  carousel_slider: ^4.1.1
-
-  # ✅ Utility Libraries
-  collection: ^1.18.0
-  image_picker: ^1.1.0
-  file_picker: ^10.2.0
-
-  # ✅ Map Integration (for Contact or Campus View)
-  google_maps_flutter: ^2.5.0
-  intl: ^0.20.2
-
-  # ✅ (Future) Firebase Integration – Uncomment when ready
-  # firebase_core: ^2.27.0
-  # cloud_firestore: ^4.15.0
-  # firebase_auth: ^4.18.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^3.0.2
+  flutter_launcher_icons: ^0.13.1
+
+flutter_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/app_icon.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
-
-  assets:
-    - assets/images/Itm_logo.png
-    - assets/animations/intro.json

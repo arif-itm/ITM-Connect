@@ -1,7 +1,7 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:itm_connect/widgets/app_layout.dart';
 
 class TeacherListScreen extends StatefulWidget {
@@ -12,68 +12,65 @@ class TeacherListScreen extends StatefulWidget {
 }
 
 class _TeacherListScreenState extends State<TeacherListScreen> {
-  final List<Map<String, String>> mockTeachers = const [
-    {
-      'name': 'Dr. Mahmudul Hasan',
-      'position': 'Professor, CSE',
-      'email': 'mahmudul@diu.edu.bd',
-      'image': 'https://via.placeholder.com/150x150.png?text=Dr.+Hasan',
-      'initials': 'MH',
-    },
-    {
-      'name': 'Ms. Farzana Rahman',
-      'position': 'Lecturer, SWE',
-      'email': 'farzana@diu.edu.bd',
-      'image': 'https://via.placeholder.com/150x150.png?text=Ms.+Farzana',
-      'initials': 'FR',
-    },
-    {
-      'name': 'Mr. Tanvir Alam',
-      'position': 'Assistant Professor, EEE',
-      'email': 'tanvir@diu.edu.bd',
-      'image': 'https://via.placeholder.com/150x150.png?text=Mr.+Tanvir',
-      'initials': 'TA',
-    },
-  ];
+  // Firestore-backed teachers
+  List<Map<String, String>> teachers = [];
 
   int? expandedIndex;
   int? showRoutineIndex;
   String selectedDay = 'Monday';
 
-  final Map<String, Map<String, List<Map<String, String>>>> dummyRoutine = {
-    'Dr. Mahmudul Hasan': {
-      'Monday': [
-        {
-          'time': '9:00 AM - 10:00 AM',
-          'subject': 'Math',
-          'code': 'MATH101',
-          'room': 'Room 201',
-          'batch': '2023',
-          'teacherInitials': 'MH',
-        },
-      ],
-    },
-    'Ms. Farzana Rahman': {
-      'Monday': [
-        {
-          'time': '10:00 AM - 11:00 AM',
-          'subject': 'English',
-          'code': 'ENG101',
-          'room': 'Room 108',
-          'batch': '2023',
-          'teacherInitials': 'FR',
-        },
-      ],
-    },
-  };
+  // Loading & error states
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     final formattedDay = DateFormat('EEEE').format(now); // EEEE = full day name
-    const validDays = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+    const validDays = [
+      'Saturday',
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday'
+    ];
     selectedDay = validDays.contains(formattedDay) ? formattedDay : 'Monday';
+    _loadTeachers();
+  }
+
+  Future<void> _loadTeachers() async {
+    try {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+      final qs = await FirebaseFirestore.instance
+          .collection('teachers')
+          .orderBy('name')
+          .get();
+
+      teachers = qs.docs.map((d) {
+        final data = d.data();
+        return {
+          'id': d.id,
+          'name': (data['name'] ?? '') as String,
+          'position': (data['role'] ?? '') as String,
+          'email': (data['email'] ?? '') as String,
+          'image': (data['photoUrl'] ?? '') as String,
+          'initials': (data['initial'] ?? '') as String,
+        };
+      }).toList();
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -89,77 +86,102 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
             child: Column(
               children: [
                 Expanded(
-                  child: mockTeachers.isEmpty
-                      ? const Center(
-                    child: Text(
-                      'No Teachers Available',
-                      style: TextStyle(fontSize: 18, color: Colors.black54),
-                    ),
-                  )
-                      : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: mockTeachers.length,
-                    itemBuilder: (context, index) {
-                      bool shouldShowCard = expandedIndex == null || expandedIndex == index;
-                      if (!shouldShowCard) return const SizedBox.shrink();
-
-                      final teacher = mockTeachers[index];
-                      final isExpanded = expandedIndex == index;
-                      final routineVisible = showRoutineIndex == index;
-
-                      return Animate(
-                        effects: [
-                          FadeEffect(duration: 400.ms, delay: (index * 100).ms),
-                          SlideEffect(begin: const Offset(0, 0.2), duration: 400.ms),
-                        ],
-                        child: GestureDetector(
-                          onTap: () {
-                            if (!routineVisible) {
-                              setState(() {
-                                if (isExpanded) {
-                                  expandedIndex = null;
-                                  showRoutineIndex = null;
-                                } else {
-                                  expandedIndex = index;
-                                  showRoutineIndex = null;
-                                }
-                              });
-                            }
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                            margin: const EdgeInsets.symmetric(vertical: 10),
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              color: Colors.white.withOpacity(0.9),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 4),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _error != null
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Text(
+                                  _error!,
+                                  style: const TextStyle(
+                                      color: Colors.redAccent, fontSize: 14),
+                                  textAlign: TextAlign.center,
                                 ),
-                              ],
-                            ),
-                            child: Column(
-                              children: [
-                                isExpanded
-                                    ? _buildExpandedContent(teacher, index, routineVisible)
-                                    : _buildCollapsedContent(teacher),
-                                if (routineVisible) ...[
-                                  const SizedBox(height: 20),
-                                  _buildDaySelector(),
-                                  const SizedBox(height: 16),
-                                  _buildRoutineList(teacher['name']!),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                              ),
+                            )
+                          : teachers.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'No Teachers Available',
+                                    style: TextStyle(
+                                        fontSize: 18, color: Colors.black54),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.all(16),
+                                  itemCount: teachers.length,
+                                  itemBuilder: (context, index) {
+                                    final teacher = teachers[index];
+                                    final isExpanded = expandedIndex == index;
+                                    final routineVisible =
+                                        showRoutineIndex == index;
+
+                                    return Animate(
+                                      effects: [
+                                        FadeEffect(
+                                            duration: 400.ms,
+                                            delay: (index * 100).ms),
+                                        const SlideEffect(
+                                            begin: Offset(0, 0.2),
+                                            duration:
+                                                Duration(milliseconds: 400)),
+                                      ],
+                                      child: GestureDetector(
+                                        onTap: () {
+                                          if (!routineVisible) {
+                                            setState(() {
+                                              expandedIndex =
+                                                  isExpanded ? null : index;
+                                              showRoutineIndex = null;
+                                            });
+                                          }
+                                        },
+                                        child: AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 300),
+                                          curve: Curves.easeInOut,
+                                          margin: const EdgeInsets.symmetric(
+                                              vertical: 10),
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(24),
+                                            color:
+                                                Colors.white.withOpacity(0.9),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black
+                                                    .withOpacity(0.1),
+                                                blurRadius: 8,
+                                                offset: const Offset(0, 4),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              isExpanded
+                                                  ? _buildExpandedContent(
+                                                      teacher,
+                                                      index,
+                                                      routineVisible)
+                                                  : _buildCollapsedContent(
+                                                      teacher),
+                                              if (routineVisible) ...[
+                                                const SizedBox(height: 20),
+                                                _buildDaySelector(),
+                                                const SizedBox(height: 16),
+                                                // Load routine from Firestore without requiring a composite index.
+                                                _buildRoutineList(
+                                                    teacher['name'] ?? ''),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
                 ),
               ],
             ),
@@ -181,7 +203,8 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
                       showRoutineIndex = null;
                     });
                   },
-                  child: const Icon(Icons.arrow_back, size: 18, color: Colors.white),
+                  child: const Icon(Icons.arrow_back,
+                      size: 18, color: Colors.white),
                 ),
               ),
             ),
@@ -200,7 +223,8 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(teacher['name'] ?? '',
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               Text(teacher['position'] ?? '',
                   style: const TextStyle(fontSize: 14, color: Colors.black54)),
@@ -212,7 +236,8 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
     );
   }
 
-  Widget _buildExpandedContent(Map<String, String> teacher, int index, bool routineVisible) {
+  Widget _buildExpandedContent(
+      Map<String, String> teacher, int index, bool routineVisible) {
     return Column(
       children: [
         _buildTeacherImage(teacher, size: 120),
@@ -229,14 +254,16 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.green.shade700,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           ),
           onPressed: () {
             setState(() {
               showRoutineIndex = routineVisible ? null : index;
             });
           },
-          icon: Icon(routineVisible ? Icons.close : Icons.schedule, color: Colors.white),
+          icon: Icon(routineVisible ? Icons.close : Icons.schedule,
+              color: Colors.white),
           label: Text(
             routineVisible ? 'Hide Routine' : 'Routine',
             style: const TextStyle(fontSize: 16, color: Colors.white),
@@ -252,7 +279,8 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.green.shade700, width: size == 60 ? 2 : 3),
+        border:
+            Border.all(color: Colors.green.shade700, width: size == 60 ? 2 : 3),
       ),
       child: ClipOval(
         child: Image.network(
@@ -266,7 +294,14 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
   }
 
   Widget _buildDaySelector() {
-    final days = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'];
+    final days = [
+      'Saturday',
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday'
+    ];
 
     return SizedBox(
       height: 44,
@@ -283,7 +318,8 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: isSelected ? Colors.green.shade700 : Colors.grey.shade200,
+                color:
+                    isSelected ? Colors.green.shade700 : Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(22),
               ),
               child: Text(
@@ -302,68 +338,113 @@ class _TeacherListScreenState extends State<TeacherListScreen> {
   }
 
   Widget _buildRoutineList(String teacherName) {
-    final routineList = dummyRoutine[teacherName]?[selectedDay] ?? [];
-
-    if (routineList.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 20),
-        child: Text(
-          'No routine available for this day.',
-          style: TextStyle(color: Colors.black54),
-        ),
-      );
-    }
-
-    return Column(
-      children: routineList.map((routineItem) {
-        return Container(
-          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            gradient: const LinearGradient(
-              colors: [Color(0xFFBBE0BD), Color(0xFFFFFFFF)],
-              begin: Alignment.centerRight,
-              end: Alignment.centerLeft,
+    // routines collection: fields include {teacher, day, time, courseName, courseCode, room, batch, teacherInitial}
+    return FutureBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      future: FirebaseFirestore.instance
+          .collection('routines')
+          .where('teacher', isEqualTo: teacherName)
+          .where('day', isEqualTo: selectedDay)
+          // Avoid composite index by not ordering server-side; sort client-side
+          .get(),
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snap.hasError) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20),
+            child: Text(
+              'Failed to load routine: ${snap.error}',
+              style: const TextStyle(color: Colors.redAccent),
             ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(routineItem['time'] ?? '',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(
-                '${routineItem['subject']} (${routineItem['code']})',
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 6),
-              Text('${routineItem['room']}  |  Batch: ${routineItem['batch']}',
-                  style: const TextStyle(fontSize: 14, color: Colors.black87)),
-              const SizedBox(height: 6),
-              if (routineItem['teacherInitials'] != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: Colors.green.shade700,
-                    child: Text(
-                      routineItem['teacherInitials']!,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+          );
+        }
+        final docs = snap.data?.docs ?? [];
+
+        // client-side sort by time string
+        docs.sort((a, b) {
+          final ta = (a.data()['time'] ?? '') as String;
+          final tb = (b.data()['time'] ?? '') as String;
+          return ta.compareTo(tb);
+        });
+
+        if (docs.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 20),
+            child: Text(
+              'No routine available for this day.',
+              style: TextStyle(color: Colors.black54),
+            ),
+          );
+        }
+
+        return Column(
+          children: docs.map((d) {
+            final r = d.data();
+            final time = (r['time'] ?? '') as String;
+            final courseName = (r['courseName'] ?? '') as String;
+            final code = (r['courseCode'] ?? '') as String;
+            final room = (r['room'] ?? '') as String;
+            final batch = (r['batch'] ?? '') as String;
+            final initials = (r['teacherInitial'] ?? '') as String;
+
+            return Container(
+              margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFBBE0BD), Color(0xFFFFFFFF)],
+                  begin: Alignment.centerRight,
+                  end: Alignment.centerLeft,
                 ),
-            ],
-          ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(time,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(
+                    '$courseName ($code)',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('$room  |  Batch: $batch',
+                      style:
+                          const TextStyle(fontSize: 14, color: Colors.black87)),
+                  const SizedBox(height: 6),
+                  if (initials.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.green.shade700,
+                        child: Text(
+                          initials,
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          }).toList(),
         );
-      }).toList(),
+      },
     );
   }
 }
