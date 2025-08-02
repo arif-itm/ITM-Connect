@@ -1,0 +1,80 @@
+name: Flutter Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_and_release:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.3.0' # Specify your Flutter version here, e.g., '3.19.5' or '3.x.x'
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Build Web
+      run: flutter build web
+
+    - name: Build Android (APK)
+      run: flutter build apk --release
+
+    - name: Build iOS (IPA)
+      run: flutter build ipa --release
+      # Note: iOS IPA builds may require additional configuration for signing and provisioning profiles.
+
+    - name: Generate Version Number
+      id: vars
+      run: echo "version=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.vars.outputs.version }}
+        release_name: Release v${{ steps.vars.outputs.version }}
+        body: |
+          Release generated from commit ${{ github.sha }}
+
+    - name: Zip Web Build
+      run: zip -r web_build.zip build/web
+
+    - name: Upload Web Artifact
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: web_build.zip
+        asset_name: web_build.zip
+        asset_content_type: application/zip
+
+    - name: Upload Android Artifact
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/app/outputs/apk/release/app-release.apk
+        asset_name: app-release.apk
+        asset_content_type: application/vnd.android.package-archive
+
+    - name: Upload iOS Artifact
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: build/ios/ipa/runner.ipa # Path might vary, verify output
+        asset_name: runner.ipa
+        asset_content_type: application/octet-stream
