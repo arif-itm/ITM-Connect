@@ -35,7 +35,7 @@ jobs:
       run: flutter clean
 
     - name: Build Web
-      run: flutter build web
+      run: flutter build web --release
 
     - name: Build Android (APK)
       run: flutter build apk --release
