@@ -1,5 +1,19 @@
 {
   "firestore": {
     "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "__/.*",
+      "__/node_modules/__"
+    ],
+    "rewrites": [
+      {
+        "source": "__",
+        "destination": "/index.html"
+      }
+    ]
   }
 }
