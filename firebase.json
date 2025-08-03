@@ -11,6 +11,10 @@
     ],
     "rewrites": [
       {
+        "source": "/apk",
+        "destination": "/index.html"
+      },
+      {
         "source": "__",
         "destination": "/index.html"
       }

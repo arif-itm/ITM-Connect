@@ -38,6 +38,51 @@
   <meta name="application-name" content="ITM Connect">
   <meta name="theme-color" content="#0b5fff">
   <link rel="manifest" href="manifest.json">
+  <script>
+    // Simple route-based redirect for "/apk" to the latest APK download
+    (function () {
+      var APK_PATH = "/apk";
+      var APK_URL = "https://github.com/arif-itm/ITM-Connect/releases/download/latest/itm-connect.apk";
+
+      function isApkPath(pathname) {
+        if (!pathname) return false;
+        // Normalize: remove trailing slash unless it's just "/"
+        var p = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+        return p === APK_PATH;
+      }
+
+      function handleRoute() {
+        try {
+          if (isApkPath(window.location.pathname)) {
+            // Use replace to avoid adding to history and prevent loop
+            window.location.replace(APK_URL);
+          }
+        } catch (_) { /* no-op */ }
+      }
+
+      // Run as early as possible
+      handleRoute();
+
+      // Catch SPA route changes (Flutter web uses history)
+      window.addEventListener("popstate", handleRoute);
+      window.addEventListener("hashchange", handleRoute);
+      // Also observe pushState/replaceState if app uses them
+      (function () {
+        var pushState = history.pushState;
+        var replaceState = history.replaceState;
+        history.pushState = function () {
+          var r = pushState.apply(this, arguments);
+          try { handleRoute(); } catch (_) {}
+          return r;
+        };
+        history.replaceState = function () {
+          var r = replaceState.apply(this, arguments);
+          try { handleRoute(); } catch (_) {}
+          return r;
+        };
+      })();
+    })();
+  </script>
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
