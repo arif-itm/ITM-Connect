@@ -1,7 +1,9 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:http/http.dart' as http;
 import '../../../services/firestore_service.dart';
 
 class ManageTeacherScreen extends StatefulWidget {
@@ -33,13 +35,35 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     );
   }
 
+  Future<String> _uploadToImgBB(File file) async {
+    // Using provided API key
+    const apiKey = 'b6afb366c0d7f03f6368483a1ba5fb44';
+    final bytes = await file.readAsBytes();
+    final base64Image = base64Encode(bytes);
+    final uri = Uri.parse('https://api.imgbb.com/1/upload?key=$apiKey');
+
+    final response = await http.post(uri, body: {'image': base64Image});
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final url = (json['data']?['url'] ?? json['data']?['display_url']) as String?;
+      if (url == null || url.isEmpty) {
+        throw Exception('ImgBB response missing url');
+      }
+      return url;
+    } else {
+      throw Exception('ImgBB upload failed: ${response.statusCode} ${response.body}');
+    }
+  }
+
   void _showTeacherForm({Map<String, dynamic>? existingData, String? docId}) {
     final nameController = TextEditingController(text: existingData?['name']);
     final emailController = TextEditingController(text: existingData?['email']);
     final roleController = TextEditingController(text: existingData?['role']);
     final initialController =
         TextEditingController(text: existingData?['initial']);
-    File? selectedFile; // kept for UI, not yet uploaded to Storage
+    File? selectedFile; // kept for UI, uploaded to ImgBB on save
+    String? uploadError;
+    bool isUploading = false;
 
     bool showNameError = false;
     bool showEmailError = false;
@@ -98,11 +122,12 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                       if (result != null && result.files.single.path != null) {
                         setModalState(() {
                           selectedFile = File(result.files.single.path!);
+                          uploadError = null;
                         });
                       }
                     },
                     icon: const Icon(Icons.image),
-                    label: const Text('Upload Photo'),
+                    label: const Text('Select Photo'),
                   ),
                   const SizedBox(height: 12),
                   if (selectedFile != null)
@@ -115,6 +140,13 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                         fit: BoxFit.cover,
                       ),
                     ),
+                  if (uploadError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      uploadError!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -145,12 +177,36 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                     return;
                   }
 
+                  String? finalPhotoUrl = existingData?['photoUrl'];
+
+                  if (selectedFile != null) {
+                    try {
+                      setModalState(() {
+                        isUploading = true;
+                        uploadError = null;
+                      });
+                      finalPhotoUrl = await _uploadToImgBB(selectedFile!);
+                    } catch (e) {
+                      setModalState(() {
+                        uploadError = 'Image upload failed. Please try another image.';
+                      });
+                      setModalState(() {
+                        isUploading = false;
+                      });
+                      return;
+                    } finally {
+                      setModalState(() {
+                        isUploading = false;
+                      });
+                    }
+                  }
+
                   final payload = {
                     'name': name,
                     'email': email,
                     'role': role,
                     'initial': initial,
-                    'photoUrl': existingData?['photoUrl'],
+                    'photoUrl': finalPhotoUrl,
                     'updatedAt': FieldValue.serverTimestamp(),
                   };
 
@@ -165,7 +221,13 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
 
                   if (mounted) Navigator.pop(context);
                 },
-                child: const Text('Save'),
+                child: isUploading
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('Save'),
               ),
             ],
           );
