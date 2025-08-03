@@ -1,9 +1,13 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'dart:io' show File;
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+
 import '../../../services/firestore_service.dart';
 
 class ManageTeacherScreen extends StatefulWidget {
@@ -35,24 +39,78 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     );
   }
 
+  // Native (mobile/desktop): upload from File (mirrors curl -F image=@...)
   Future<String> _uploadToImgBB(File file) async {
-    // Using provided API key
     const apiKey = 'b6afb366c0d7f03f6368483a1ba5fb44';
-    final bytes = await file.readAsBytes();
-    final base64Image = base64Encode(bytes);
-    final uri = Uri.parse('https://api.imgbb.com/1/upload?key=$apiKey');
+    final uri = Uri.parse('https://api.imgbb.com/1/upload');
 
-    final response = await http.post(uri, body: {'image': base64Image});
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body) as Map<String, dynamic>;
-      final url = (json['data']?['url'] ?? json['data']?['display_url']) as String?;
-      if (url == null || url.isEmpty) {
-        throw Exception('ImgBB response missing url');
-      }
-      return url;
-    } else {
-      throw Exception('ImgBB upload failed: ${response.statusCode} ${response.body}');
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
+      throw Exception('Selected file is empty.');
     }
+
+    final request = http.MultipartRequest('POST', uri)..fields['key'] = apiKey;
+    final fileName = file.path.split('/').last;
+    request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: fileName));
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    Map<String, dynamic> jsonResp;
+    try {
+      jsonResp = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('ImgBB response parse error: ${response.statusCode} ${response.body}');
+    }
+
+    if (response.statusCode != 200 || jsonResp['success'] != true) {
+      final err = jsonResp['error'];
+      final errMessage = err is Map<String, dynamic> ? (err['message']?.toString() ?? '') : '';
+      throw Exception('ImgBB upload failed: ${response.statusCode} ${errMessage.isNotEmpty ? errMessage : response.body}');
+    }
+
+    final data = jsonResp['data'] as Map<String, dynamic>?;
+    final url = (data?['display_url'] ?? data?['url'])?.toString();
+    if (url == null || url.isEmpty) {
+      throw Exception('ImgBB response missing URL');
+    }
+    return url;
+  }
+
+  // Web: upload from bytes (path is unavailable on web)
+  Future<String> _uploadBytesToImgBB(Uint8List bytes, {required String fileName}) async {
+    const apiKey = 'b6afb366c0d7f03f6368483a1ba5fb44';
+    final uri = Uri.parse('https://api.imgbb.com/1/upload');
+
+    if (bytes.isEmpty) {
+      throw Exception('Selected file is empty.');
+    }
+
+    final request = http.MultipartRequest('POST', uri)..fields['key'] = apiKey;
+    request.files.add(http.MultipartFile.fromBytes('image', bytes, filename: fileName));
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    Map<String, dynamic> jsonResp;
+    try {
+      jsonResp = jsonDecode(response.body) as Map<String, dynamic>;
+    } catch (_) {
+      throw Exception('ImgBB response parse error: ${response.statusCode} ${response.body}');
+    }
+
+    if (response.statusCode != 200 || jsonResp['success'] != true) {
+      final err = jsonResp['error'];
+      final errMessage = err is Map<String, dynamic> ? (err['message']?.toString() ?? '') : '';
+      throw Exception('ImgBB upload failed: ${response.statusCode} ${errMessage.isNotEmpty ? errMessage : response.body}');
+    }
+
+    final data = jsonResp['data'] as Map<String, dynamic>?;
+    final url = (data?['display_url'] ?? data?['url'])?.toString();
+    if (url == null || url.isEmpty) {
+      throw Exception('ImgBB response missing URL');
+    }
+    return url;
   }
 
   void _showTeacherForm({Map<String, dynamic>? existingData, String? docId}) {
@@ -61,7 +119,12 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
     final roleController = TextEditingController(text: existingData?['role']);
     final initialController =
         TextEditingController(text: existingData?['initial']);
-    File? selectedFile; // kept for UI, uploaded to ImgBB on save
+
+    // Selection state
+    File? selectedFile; // native platforms
+    Uint8List? selectedBytes; // web platforms
+    String? selectedFileName;
+
     String? uploadError;
     bool isUploading = false;
 
@@ -113,16 +176,77 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                     ),
                   ),
                   const SizedBox(height: 12),
+
+                  // Photo requirements note
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF0F4FF),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFCCD9FF)),
+                    ),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Photo requirements',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF2B4CB3),
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          '• Format: JPG, JPEG, or PNG\n• Max size: 10 MB\n• Recommended: square image for best avatar fit',
+                          style: TextStyle(fontSize: 12, color: Color(0xFF2B4CB3)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
                   ElevatedButton.icon(
                     onPressed: () async {
                       final result = await FilePicker.platform.pickFiles(
                         type: FileType.custom,
                         allowedExtensions: ['jpg', 'jpeg', 'png'],
+                        withData: true,
                       );
-                      if (result != null && result.files.single.path != null) {
+                      if (result != null && result.files.isNotEmpty) {
+                        final picked = result.files.single;
+                        final ext = (picked.extension ?? '').toLowerCase();
+                        final allowed = ['jpg', 'jpeg', 'png'];
+                        String? localError;
+
+                        if (!allowed.contains(ext)) {
+                          localError = 'Invalid file format. Select JPG, JPEG, or PNG.';
+                        } else if (picked.size > 10 * 1024 * 1024) {
+                          localError = 'File too large. Max allowed size is 10 MB.';
+                        } else if ((picked.bytes == null || picked.bytes!.isEmpty) &&
+                            (picked.path == null || picked.path!.isEmpty)) {
+                          localError = 'Could not read selected file.';
+                        }
+
                         setModalState(() {
-                          selectedFile = File(result.files.single.path!);
-                          uploadError = null;
+                          if (localError != null) {
+                            uploadError = localError;
+                            selectedFile = null;
+                            selectedBytes = null;
+                            selectedFileName = null;
+                          } else {
+                            uploadError = null;
+                            selectedFileName = picked.name;
+                            if (kIsWeb) {
+                              // Web: path is unavailable; use bytes
+                              selectedBytes = picked.bytes!;
+                              selectedFile = null;
+                            } else {
+                              // Native: can use path
+                              selectedFile = File(picked.path!);
+                              selectedBytes = null;
+                            }
+                          }
                         });
                       }
                     },
@@ -130,11 +254,22 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                     label: const Text('Select Photo'),
                   ),
                   const SizedBox(height: 12),
-                  if (selectedFile != null)
+
+                  if (!kIsWeb && selectedFile != null)
                     ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: Image.file(
                         selectedFile!,
+                        height: 100,
+                        width: 100,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else if (kIsWeb && selectedBytes != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        selectedBytes!,
                         height: 100,
                         width: 100,
                         fit: BoxFit.cover,
@@ -179,16 +314,31 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
 
                   String? finalPhotoUrl = existingData?['photoUrl'];
 
-                  if (selectedFile != null) {
+                  // Decide upload source
+                  final bool hasNewImage =
+                      kIsWeb ? (selectedBytes != null) : (selectedFile != null);
+
+                  if (hasNewImage) {
                     try {
                       setModalState(() {
                         isUploading = true;
                         uploadError = null;
                       });
-                      finalPhotoUrl = await _uploadToImgBB(selectedFile!);
+
+                      if (kIsWeb && selectedBytes != null) {
+                        finalPhotoUrl = await _uploadBytesToImgBB(
+                          selectedBytes!,
+                          fileName: selectedFileName ?? 'photo.jpg',
+                        );
+                      } else if (!kIsWeb && selectedFile != null) {
+                        finalPhotoUrl = await _uploadToImgBB(selectedFile!);
+                      }
                     } catch (e) {
+                      // ignore: avoid_print
+                      print('ImgBB upload error: $e');
                       setModalState(() {
-                        uploadError = 'Image upload failed. Please try another image.';
+                        uploadError =
+                            'Image upload failed: ${e is Exception ? e.toString().replaceFirst("Exception: ", "") : e.toString()}';
                       });
                       setModalState(() {
                         isUploading = false;
@@ -225,7 +375,10 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
                     ? const SizedBox(
                         height: 18,
                         width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Text('Save'),
               ),
@@ -261,7 +414,40 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
 
   Widget _buildTeacherCard(Map<String, dynamic> teacher, String docId) {
     final imageFile = teacher['imageFile'];
-    final photoUrl = teacher['photoUrl'];
+    final photoUrl = teacher['photoUrl'] as String?;
+
+    Widget avatarChild;
+    if (imageFile != null) {
+      avatarChild = CircleAvatar(
+        radius: 28,
+        backgroundImage: FileImage(imageFile),
+      );
+    } else if (photoUrl != null && photoUrl.isNotEmpty) {
+      // Use Image.network with errorBuilder to avoid breaking UI on web CORS/hotlink issues
+      avatarChild = CircleAvatar(
+        radius: 28,
+        backgroundColor: Colors.grey.shade200,
+        child: ClipOval(
+          child: Image.network(
+            photoUrl,
+            width: 56,
+            height: 56,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => Image.asset(
+              'assets/images/default_profile.png',
+              width: 56,
+              height: 56,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+      );
+    } else {
+      avatarChild = const CircleAvatar(
+        radius: 28,
+        backgroundImage: AssetImage('assets/images/default_profile.png'),
+      );
+    }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
@@ -279,17 +465,8 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
         ],
       ),
       child: ListTile(
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        leading: CircleAvatar(
-          radius: 28,
-          backgroundImage: imageFile != null
-              ? FileImage(imageFile)
-              : (photoUrl != null && (photoUrl as String).isNotEmpty)
-                  ? NetworkImage(photoUrl)
-                  : const AssetImage('assets/images/default_profile.png')
-                      as ImageProvider,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        leading: avatarChild,
         title: Text(
           '${teacher['name']} (${teacher['initial']})',
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -298,8 +475,10 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(teacher['email'] ?? '', style: const TextStyle(fontSize: 14)),
-            Text(teacher['role'] ?? '',
-                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+            Text(
+              teacher['role'] ?? '',
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
+            ),
           ],
         ),
         trailing: Wrap(
@@ -307,8 +486,7 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
           children: [
             IconButton(
               icon: const Icon(Icons.edit, color: Colors.orange),
-              onPressed: () =>
-                  _showTeacherForm(existingData: teacher, docId: docId),
+              onPressed: () => _showTeacherForm(existingData: teacher, docId: docId),
             ),
             IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),
@@ -322,8 +500,16 @@ class _ManageTeacherScreenState extends State<ManageTeacherScreen>
 
   @override
   void dispose() {
-    _animationController.dispose();
+    _animation_controller_dispose_safe();
     super.dispose();
+  }
+
+  void _animation_controller_dispose_safe() {
+    try {
+      _animationController.dispose();
+    } catch (_) {
+      // ignore
+    }
   }
 
   @override
