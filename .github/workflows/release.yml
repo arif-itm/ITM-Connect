@@ -58,7 +58,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
-        name: latest
+        name: ITM Connect — Latest
         draft: false
         prerelease: false
         generate_release_notes: false
@@ -77,7 +77,7 @@ jobs:
           web_build.zip
           build/app/outputs/apk/release/app-release.apk
         name: |
-          web_build.zip
+          ITM-Connect-Web.zip
           ITM-Connect.apk
         overwrite: true
       env:
@@ -87,7 +87,7 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ steps.vars.outputs.version }}
-        name: Release v${{ steps.vars.outputs.version }}
+        name: ITM Connect — v${{ steps.vars.outputs.version }}
         draft: false
         prerelease: false
         generate_release_notes: false
@@ -95,6 +95,8 @@ jobs:
           Release generated from commit ${{ github.sha }}
         files: |
           web_build.zip
+        name: |
+          ITM-Connect-Web-v${{ steps.vars.outputs.version }}.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -105,7 +107,7 @@ jobs:
         files: |
           build/app/outputs/apk/release/app-release.apk
         name: |
-          ITM-Connect.apk
+          ITM-Connect-v${{ steps.vars.outputs.version }}.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
