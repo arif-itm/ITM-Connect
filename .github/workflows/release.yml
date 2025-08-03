@@ -76,10 +76,11 @@ jobs:
         files: |
           web_build.zip
           build/app/outputs/apk/release/app-release.apk
-        name: |
+        file_glob: false
+        overwrite: true
+        asset_name: |
           ITM-Connect-Web.zip
           ITM-Connect.apk
-        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -95,8 +96,8 @@ jobs:
           Release generated from commit ${{ github.sha }}
         files: |
           web_build.zip
-        name: |
-          ITM-Connect-Web-v${{ steps.vars.outputs.version }}.zip
+        file_glob: false
+        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -106,8 +107,9 @@ jobs:
         tag_name: v${{ steps.vars.outputs.version }}
         files: |
           build/app/outputs/apk/release/app-release.apk
-        name: |
-          ITM-Connect-v${{ steps.vars.outputs.version }}.apk
+        file_glob: false
+        overwrite: true
+        asset_name: ITM-Connect-v${{ steps.vars.outputs.version }}.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
