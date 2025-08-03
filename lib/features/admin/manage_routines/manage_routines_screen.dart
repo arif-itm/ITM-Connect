@@ -21,8 +21,8 @@ class _ManageRoutineScreenState extends State<ManageRoutineScreen>
   ];
   final List<String> _defaultBatches = [];
 
-  String selectedDay = 'Sunday';
-  String selectedBatch = '56th';
+  String selectedDay = 'Saturday';
+  String selectedBatch = '';
 
   final TextEditingController _batchController = TextEditingController();
 
@@ -298,7 +298,7 @@ class _ManageRoutineScreenState extends State<ManageRoutineScreen>
               content: TextField(
                 controller: editCtrl,
                 decoration: const InputDecoration(
-                  hintText: 'Enter new batch id (e.g. 6, 56th)',
+                  hintText: 'Enter new batch id (e.g. 1)',
                 ),
               ),
               actions: [
@@ -370,7 +370,7 @@ class _ManageRoutineScreenState extends State<ManageRoutineScreen>
                       child: TextField(
                         controller: controller,
                         decoration: const InputDecoration(
-                          hintText: 'New batch (e.g. 6 / 56th)',
+                          hintText: 'New batch (e.g. 1)',
                         ),
                         onSubmitted: (_) => addBatch(),
                       ),
