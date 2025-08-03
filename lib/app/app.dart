@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:async';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_analytics/observer.dart';
 import 'package:itm_connect/features/landing/landing_screen.dart';
 import 'package:itm_connect/features/admin/dashboard/admin_dashboard_screen.dart';
 import 'package:itm_connect/services/auth_guard.dart';
@@ -9,9 +12,25 @@ import 'package:itm_connect/features/user/teacher/list/teacher_list_screen.dart'
 import 'package:itm_connect/features/user/notice/notice_board_screen.dart';
 import 'package:itm_connect/features/user/contact/contact_us_screen.dart';
 import 'package:itm_connect/features/user/feedback/feedback_screen.dart';
+import 'package:itm_connect/services/prefs_service.dart';
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  late final FirebaseAnalytics _analytics;
+  late final FirebaseAnalyticsObserver _observer;
+
+  @override
+  void initState() {
+    super.initState();
+    _analytics = FirebaseAnalytics.instance;
+    _observer = FirebaseAnalyticsObserver(analytics: _analytics);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -24,8 +43,10 @@ class MyApp extends StatelessWidget {
           colorSchemeSeed: Colors.green,
           useMaterial3: true,
         ),
+        navigatorObservers: [_observer],
         // Use home OR initialRoute/routes, not both with '/' when home is set.
         home: const _AppEntry(), // Startup check widget
+        // Note: initial screen will be decided by _AppEntry using PrefsService.hasOnboarded
         onGenerateRoute: (settings) {
           // Guarded admin route
           if (settings.name == '/admin_home') {
@@ -104,35 +125,51 @@ class _AppEntryState extends State<_AppEntry> {
   @override
   void initState() {
     super.initState();
-    // No local storage. FirebaseAuth restores session automatically.
-    // Routing is decided once AuthGuard finishes resolving.
     WidgetsBinding.instance.addPostFrameCallback((_) => _decide());
   }
 
-  void _decide() {
+  Future<void> _decide() async {
     final guard = Provider.of<AuthGuard>(context, listen: false);
-    // Listen once; when loading flips false, navigate accordingly.
-    void handle() {
-      if (!mounted) return;
-      if (guard.loading) return;
-      if (guard.user != null && guard.isAdmin) {
-        Navigator.of(context).pushReplacementNamed('/admin_home');
-      } else {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const LandingScreen()),
-        );
+
+    // Wait for AuthGuard to resolve admin session if still loading
+    Future<void> waitGuard() async {
+      if (!guard.loading) return;
+      final c = Completer<void>();
+      void handle() {
+        if (!guard.loading) {
+          guard.removeListener(handle);
+          c.complete();
+        }
       }
+      guard.addListener(handle);
+      return c.future;
     }
 
-    // If already resolved, handle immediately; else wait for update.
-    if (!guard.loading) {
-      handle();
+    await waitGuard();
+
+    if (!mounted) return;
+
+    // If admin logged in -> go admin
+    if (guard.user != null && guard.isAdmin) {
+      Navigator.of(context).pushReplacementNamed('/admin_home');
+      return;
+    }
+
+    // For non-admin flow, check persisted onboarding flag
+    final hasOnboarded = await PrefsService.getHasOnboarded();
+
+    if (!mounted) return;
+
+    if (hasOnboarded) {
+      // Go directly to user home
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const UserHomeScreen()),
+      );
     } else {
-      // Add a micro-listener to run once
-      guard.addListener(handle);
-      // Remove listener after first navigation by scheduling a microtask
-      // Navigation will rebuild tree, so keeping it minimal.
-      // We rely on navigation to drop this widget and its listeners.
+      // Default to landing
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LandingScreen()),
+      );
     }
   }
 

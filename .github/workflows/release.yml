@@ -47,46 +47,63 @@ jobs:
       id: vars
       run: echo "version=$(git rev-list --count HEAD)" >> $GITHUB_OUTPUT
 
-    - name: Create GitHub Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: v${{ steps.vars.outputs.version }}
-        release_name: Release v${{ steps.vars.outputs.version }}
-        body: |
-          Release generated from commit ${{ github.sha }}
-
     - name: Zip Web Build
       run: zip -r web_build.zip build/web
 
-    - name: Upload Web Artifact
-      uses: actions/upload-release-asset@v1
+    - name: Ensure 'latest' release exists (no assets yet)
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        name: latest
+        draft: false
+        prerelease: false
+        generate_release_notes: false
+        body: |
+          This is the stable rolling release. Assets here are kept up to date with the latest successful build from main.
+          Commit: ${{ github.sha }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: web_build.zip
-        asset_name: web_build.zip
-        asset_content_type: application/zip
 
-    - name: Upload Android Artifact
-      uses: actions/upload-release-asset@v1
+    - name: Replace assets on 'latest' (web + apk)
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: latest
+        files: |
+          web_build.zip
+          build/app/outputs/apk/release/app-release.apk#ITM-Connect.apk
+        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: build/app/outputs/apk/release/app-release.apk
-        asset_name: ITM-Connect.apk
-        asset_content_type: application/vnd.android.package-archive
 
-    # - name: Upload iOS Artifact
-    #   uses: actions/upload-release-asset@v1
+    - name: Create archival release v${{ steps.vars.outputs.version }} (attach web)
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.vars.outputs.version }}
+        name: Release v${{ steps.vars.outputs.version }}
+        draft: false
+        prerelease: false
+        generate_release_notes: false
+        body: |
+          Release generated from commit ${{ github.sha }}
+        files: |
+          web_build.zip
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Upload Android Artifact to archival v${{ steps.vars.outputs.version }}
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ steps.vars.outputs.version }}
+        files: |
+          build/app/outputs/apk/release/app-release.apk#ITM-Connect.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # - name: Upload iOS Artifact to archival v${{ steps.vars.outputs.version }}
+    #   uses: softprops/action-gh-release@v2
+    #   with:
+    #     tag_name: v${{ steps.vars.outputs.version }}
+    #     files: |
+    #       build/ios/ipa/runner.ipa#runner.ipa
     #   env:
     #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    #   with:
-    #     upload_url: ${{ steps.create_release.outputs.upload_url }}
-    #     asset_path: build/ios/ipa/runner.ipa # Path might vary, verify output
-    #     asset_name: runner.ipa
-    #     asset_content_type: application/octet-stream

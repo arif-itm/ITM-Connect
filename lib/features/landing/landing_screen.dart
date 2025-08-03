@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:itm_connect/features/admin/login/admin_login_screen.dart';
 import 'package:itm_connect/features/user/home/user_home_screen.dart';
 import 'package:itm_connect/widgets/app_layout.dart';
+import 'package:itm_connect/services/prefs_service.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -134,10 +135,11 @@ class _LandingScreenState extends State<LandingScreen> with TickerProviderStateM
                   padding: const EdgeInsets.only(bottom: 32),
                   child: Center(
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
+                      onPressed: () async {
+                        await PrefsService.setHasOnboarded(true);
+                        Navigator.of(context).pushAndRemoveUntil(
                           MaterialPageRoute(builder: (_) => const UserHomeScreen()),
+                          (route) => false,
                         );
                       },
                       icon: const Icon(Icons.arrow_forward, color: Colors.white),
