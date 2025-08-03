@@ -50,7 +50,7 @@ jobs:
     - name: Zip Web Build
       run: zip -r web_build.zip build/web
 
-    - name: Ensure 'latest' release exists (no assets yet)
+    - name: Ensure 'latest' release exists (or update it)
       uses: softprops/action-gh-release@v2
       with:
         tag_name: latest
@@ -61,6 +61,7 @@ jobs:
         body: |
           This is the stable rolling release. Assets here are kept up to date with the latest successful build from main.
           Commit: ${{ github.sha }}
+        overwrite: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
