@@ -80,7 +80,7 @@ jobs:
         overwrite: true
         asset_name: |
           ITM-Connect-Web.zip
-          ITM-Connect.apk
+          itm-connect.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -109,7 +109,7 @@ jobs:
           build/app/outputs/apk/release/app-release.apk
         file_glob: false
         overwrite: true
-        asset_name: ITM-Connect-v${{ steps.vars.outputs.version }}.apk
+        asset_name: itm-connect-v${{ steps.vars.outputs.version }}.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -121,4 +121,3 @@ jobs:
     #       build/ios/ipa/runner.ipa#runner.ipa
     #   env:
     #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
