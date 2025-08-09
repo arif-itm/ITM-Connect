@@ -1,4 +1,4 @@
-# ITM Connect
+# ITM Connect (T)
 
 ITM Connect is a cross‑platform Flutter application for institutes. It helps students and teachers stay informed and organized with:
 - Notices and announcements
